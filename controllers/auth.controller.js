@@ -100,7 +100,7 @@ exports.login = async (req, res) => {
             payload,
             process.env.JWT_SECRET,
             //Expira en 5 segundos para pruebas`
-            { expiresIn: 3600000000000000000000000000n },
+            { expiresIn: 36000 },
             (err, token) => {
                 if (err) throw err;
                 res.json({ token });
