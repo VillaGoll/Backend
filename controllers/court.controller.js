@@ -1,4 +1,5 @@
-const Court = require('../models/court');
+const Court = require('../models/Court');
+const { createLog } = require('./log.controller');
 
 const toNonNegative = (v) => {
     const n = Number(v);
@@ -38,6 +39,7 @@ exports.createCourt = async (req, res) => {
             await originalCourt.save();
         }
 
+        await createLog(req.user.name, `Creo la cancha ${court.name}`);
         res.json(court);
     } catch (err) {
         console.error(err.message);
@@ -49,6 +51,7 @@ exports.createCourt = async (req, res) => {
 exports.getOriginalCourts = async (req, res) => {
     try {
         const courts = await Court.find({ isOriginal: true });
+        
         res.json(courts);
     } catch (err) {
         console.error(err.message);
@@ -60,6 +63,7 @@ exports.getOriginalCourts = async (req, res) => {
 exports.getCourts = async (req, res) => {
     try {
         const courts = await Court.find({ isOriginal: false });
+        
         res.json(courts);
     } catch (err) {
         console.error(err.message);
@@ -93,6 +97,7 @@ exports.updateCourt = async (req, res) => {
         }
 
         await court.save();
+        await createLog(req.user.name, `Actualizo la cancha ${court.name}`);
         res.json(court);
     } catch (err) {
         console.error(err.message);
@@ -111,6 +116,7 @@ exports.deleteCourt = async (req, res) => {
         if (!court) return res.status(404).json({ msg: 'Cancha no encontrada' });
 
         await Court.findByIdAndDelete(req.params.id);
+        await createLog(req.user.name, `Elimino la cancha ${court.name}`);
         res.json({ msg: 'Cancha eliminada' });
     } catch (err) {
         console.error(err.message);

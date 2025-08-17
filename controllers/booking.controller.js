@@ -1,5 +1,7 @@
 const Booking = require('../models/Booking');
 const Client = require('../models/Client');
+const Court = require('../models/Court');
+const { createLog } = require('./log.controller');
 
 // Crear una nueva reserva
 exports.createBooking = async (req, res) => {
@@ -49,6 +51,8 @@ exports.createBooking = async (req, res) => {
             );
         }
 
+        await createLog(req.user.name, `Creo la reserva para ${clientName} en ${date} a las ${timeSlot}`);
+
         res.json(booking);
     } catch (err) {
         console.error(err.message);
@@ -62,6 +66,7 @@ exports.getBookings = async (req, res) => {
 
     try {
         const bookings = await Booking.find({ court: courtId }).populate('user', ['name', 'email']);
+        //await createLog(req.user.name, `Viewed bookings for court ${courtId}`);
         res.json(bookings);
     } catch (err) {
         console.error(err.message);
@@ -74,6 +79,9 @@ exports.getBookingsByDateRange = async (req, res) => {
     const { courtId } = req.params;
     const { startDate, endDate } = req.query;
 
+    //Buscar nombre de la cancha por id
+    const court = await Court.findById(courtId);
+    const courtName = court.name;
     try {
         const start = new Date(`${startDate}T00:00:00-06:00`);
         const end = new Date(`${endDate}T23:59:59-06:00`);
@@ -83,6 +91,7 @@ exports.getBookingsByDateRange = async (req, res) => {
             date: { $gte: start, $lte: end }
         }).populate('user', ['name', 'email']);
         
+        await createLog(req.user.name, `Vio las reservas para la cancha ${courtName} entre ${startDate} y ${endDate}`);
         res.json(bookings);
     } catch (err) {
         console.error(err.message);
@@ -130,6 +139,7 @@ exports.updateBooking = async (req, res) => {
             }
         }
 
+        await createLog(req.user.name, `Actualizo la reserva ${booking._id}`);
         res.json(booking);
     } catch (err) {
         console.error(err.message);
@@ -153,6 +163,7 @@ exports.deleteBooking = async (req, res) => {
         }
 
         await Booking.findByIdAndDelete(req.params.id);
+        await createLog(req.user.name, `Elimino la reserva ${req.params.id}`);
         res.json({ msg: 'Reserva eliminada' });
     } catch (err) {
         console.error(err.message);
@@ -225,6 +236,7 @@ exports.makePermanentBooking = async (req, res) => {
                 }
             }
             await booking.save();
+            await createLog(req.user.name, `Made booking ${booking._id} permanent`);
             return res.json({ msg: 'Reserva hecha permanente', booking });
         } else {
             // Quitar permanencia. Las reservas anteriores a la seleccionada se conservan, las futuras se eliminan.
@@ -273,6 +285,7 @@ exports.makePermanentBooking = async (req, res) => {
             }
 
             const updatedBooking = await Booking.findById(booking._id);
+            await createLog(req.user.name, `Removed permanent status from booking ${booking._id}`);
             return res.json({ msg: 'Permanencia removida.', booking: updatedBooking });
         }
         

@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { createLog } = require('./log.controller');
 
 exports.register = async (req, res) => {
     const { name, email, password, role } = req.body;
@@ -20,10 +21,12 @@ exports.register = async (req, res) => {
         });
 
         await user.save();
+        await createLog(user.name, 'User registered');
 
         const payload = {
             user: {
                 id: user.id,
+                name: user.name,
                 role: user.role,
             },
         };
@@ -59,6 +62,8 @@ exports.reAuth = async (req, res) => {
             return res.status(400).json({ msg: 'Invalid credentials' });
         }
 
+        await createLog(user.name, 'Usuario re-autenticado');
+
         res.json({ msg: 'Re-authentication successful' });
     } catch (err) {
         console.error(err.message);
@@ -86,6 +91,7 @@ exports.login = async (req, res) => {
         const payload = {
             user: {
                 id: user.id,
+                name: user.name,
                 role: user.role,
             },
         };
@@ -93,12 +99,14 @@ exports.login = async (req, res) => {
         jwt.sign(
             payload,
             process.env.JWT_SECRET,
-            { expiresIn: 3600 },
+            //Expira en 5 segundos para pruebas`
+            { expiresIn: 3600000000000000000000000000n },
             (err, token) => {
                 if (err) throw err;
                 res.json({ token });
             }
         );
+        await createLog(user.name, 'Usuario autenticado');
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server error');
