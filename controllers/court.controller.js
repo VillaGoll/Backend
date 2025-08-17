@@ -1,4 +1,4 @@
-const Court = require('../models/court');
+const Court = require('../models/Court');
 
 const toNonNegative = (v) => {
     const n = Number(v);
