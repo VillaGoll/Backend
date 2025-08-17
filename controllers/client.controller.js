@@ -1,5 +1,6 @@
 const Client = require('../models/Client');
 const Booking = require('../models/Booking');
+const { createLog } = require('./log.controller');
 
 // @desc    Create a new client
 // @route   POST /api/clients
@@ -23,6 +24,7 @@ exports.createClient = async (req, res) => {
         const client = new Client(clientData);
 
         await client.save();
+        await createLog(req.user.name, `Creo al cliente: ${client.name}`);
         res.status(201).json(client);
     } catch (error) {
         console.error("Error creating client:", error);
@@ -39,6 +41,7 @@ exports.createClient = async (req, res) => {
 exports.getClients = async (req, res) => {
     try {
         const clients = await Client.find();
+        //await createLog(req.user.name, 'Viewed clients');
         res.json(clients);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -63,6 +66,7 @@ exports.updateClient = async (req, res) => {
         client.phone = phone;
 
         await client.save();
+        await createLog(req.user.name, `Actualizo al cliente: ${client.name}`);
 
         res.json(client);
     } catch (error) {
@@ -82,6 +86,7 @@ exports.deleteClient = async (req, res) => {
         }
 
         await Client.deleteOne({ _id: req.params.id });
+        await createLog(req.user.name, `Elimino al cliente: ${client.name}`);
 
         res.json({ message: 'Client removed' });
     } catch (error) {

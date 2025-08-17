@@ -10,8 +10,8 @@ router.post('/', auth, courtController.createCourt);
 
 // @route   GET api/courts
 // @desc    Get all courts
-// @access  Public
-router.get('/', courtController.getCourts);
+// @access  Private
+router.get('/', auth, courtController.getCourts);
 
 // @route   GET api/courts/originals
 // @desc    Get all original courts

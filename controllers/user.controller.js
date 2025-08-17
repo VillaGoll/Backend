@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { createLog } = require('./log.controller');
 
 exports.createUser = async (req, res) => {
     const { name, email, password, role } = req.body;
@@ -19,6 +20,7 @@ exports.createUser = async (req, res) => {
 
         await user.save();
 
+        await createLog(req.user.name, `Creo el usuario ${user.name}`);
         res.json(user);
     } catch (err) {
         console.error(err.message);
@@ -42,6 +44,7 @@ exports.updateUser = async (req, res) => {
 
         await user.save();
 
+        await createLog(req.user.name, `Actualizo el usuario ${user.name}`);
         res.json(user);
     } catch (err) {
         console.error(err.message);
@@ -59,7 +62,8 @@ exports.deleteUser = async (req, res) => {
 
         await User.deleteOne({ _id: req.params.id });
 
-        res.json({ msg: 'User removed' });
+        await createLog(req.user.name, `Elimino el usuario ${user.name}`);
+        res.json({ msg: 'Usuario eliminado' });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server error');
@@ -69,9 +73,10 @@ exports.deleteUser = async (req, res) => {
 exports.getUsers = async (req, res) => {
     try {
         const users = await User.find().select('-password');
+        //await createLog(req.user.name, 'Viewed users');
         res.json(users);
     } catch (err) {
-        console.error(err.message);
+        console.error(err.message); 
         res.status(500).send('Server error');
     }
 };
