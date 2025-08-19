@@ -91,7 +91,7 @@ exports.getBookingsByDateRange = async (req, res) => {
             date: { $gte: start, $lte: end }
         }).populate('user', ['name', 'email']);
         
-        await createLog(req.user.name, `Vio las reservas para la cancha ${courtName} entre ${startDate} y ${endDate}`);
+        //await createLog(req.user.name, `Vio las reservas para la cancha ${courtName} entre ${startDate} y ${endDate}`);
         res.json(bookings);
     } catch (err) {
         console.error(err.message);
