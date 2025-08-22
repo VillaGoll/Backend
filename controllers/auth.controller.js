@@ -97,10 +97,10 @@ exports.login = async (req, res) => {
         };
 
         jwt.sign(
-            payload,
+            payload, 
             process.env.JWT_SECRET,
-            //Expira en 5 segundos para pruebas`
-            { expiresIn: 3600000000000000000000000000n },
+            //Expira en 5 segundos para pruebas
+            { expiresIn: 360000 },
             (err, token) => {
                 if (err) throw err;
                 res.json({ token });

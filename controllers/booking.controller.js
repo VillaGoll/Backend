@@ -55,8 +55,8 @@ exports.createBooking = async (req, res) => {
 
         res.json(booking);
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Error en el servidor');
+        console.error(err);
+        res.status(500).json({ msg: 'Error al crear la reserva', error: err.message });
     }
 };
 
@@ -69,8 +69,8 @@ exports.getBookings = async (req, res) => {
         //await createLog(req.user.name, `Viewed bookings for court ${courtId}`);
         res.json(bookings);
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Error en el servidor');
+        console.error(err);
+        res.status(500).json({ msg: 'Error al obtener las reservas', error: err.message });
     }
 };
 
@@ -81,7 +81,7 @@ exports.getBookingsByDateRange = async (req, res) => {
 
     //Buscar nombre de la cancha por id
     const court = await Court.findById(courtId);
-    const courtName = court.name;
+    //const courtName = court.name;
     try {
         const start = new Date(`${startDate}T00:00:00-06:00`);
         const end = new Date(`${endDate}T23:59:59-06:00`);
@@ -91,11 +91,11 @@ exports.getBookingsByDateRange = async (req, res) => {
             date: { $gte: start, $lte: end }
         }).populate('user', ['name', 'email']);
         
-        await createLog(req.user.name, `Vio las reservas para la cancha ${courtName} entre ${startDate} y ${endDate}`);
+        //await createLog(req.user.name, `Vio las reservas para la cancha ${courtName} entre ${startDate} y ${endDate}`);
         res.json(bookings);
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Error en el servidor');
+        console.error(err);
+        res.status(500).json({ msg: 'Error al obtener las reservas por rango de fecha', error: err.message });
     }
 };
 
@@ -201,14 +201,27 @@ exports.makePermanentBooking = async (req, res) => {
                 const newDate = new Date(startDate);
                 newDate.setDate(startDate.getDate() + (week * 7));
                 
-                // Verificar si ya existe una reserva en esa fecha y hora
+                // Verificar si ya existe una reserva en esa fecha y hora exacta
                 const existingBooking = await Booking.findOne({
                     court: booking.court,
                     date: newDate,
                     timeSlot: booking.timeSlot
                 });
                 
-                if (!existingBooking) {
+                // Verificar si ya existe una reserva permanente del mismo cliente en el mismo día de la semana
+                const dayStart = new Date(newDate);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(newDate);
+                dayEnd.setHours(23, 59, 59, 999);
+                
+                const existingPermanentBooking = await Booking.findOne({
+                    court: booking.court,
+                    date: { $gte: dayStart, $lte: dayEnd },
+                    clientName: booking.clientName,
+                    isPermanent: true
+                });
+                
+                if (!existingBooking ) {
                     bookingsToCreate.push({
                         user: booking.user,
                         court: booking.court,
@@ -217,7 +230,7 @@ exports.makePermanentBooking = async (req, res) => {
                         client: booking.client,
                         clientName: booking.clientName,
                         deposit: booking.deposit,
-                        status: 'No llegó', // Por defecto no llegó para futuras reservas
+                        status: 'No llegó',
                         isPermanent: true,
                         permanentEndDate: endDate
                     });
@@ -225,25 +238,23 @@ exports.makePermanentBooking = async (req, res) => {
             }
             
             if (bookingsToCreate.length > 0) {
-                await Booking.insertMany(bookingsToCreate);
+                const createdBookings = await Booking.insertMany(bookingsToCreate);
                 
-                // Actualizar las listas de bookings del cliente si existe
                 if (booking.client) {
-                    const newBookingIds = bookingsToCreate.map(b => b._id);
+                    const newBookingIds = createdBookings.map(b => b._id);
                     await Client.findByIdAndUpdate(booking.client, { 
                         $addToSet: { bookings: { $each: newBookingIds } } 
                     }); 
                 }
             }
             await booking.save();
-            await createLog(req.user.name, `Made booking ${booking._id} permanent`);
+            await createLog(req.user.name, `Hizo la reserva ${booking._id} permanente`);
             return res.json({ msg: 'Reserva hecha permanente', booking });
         } else {
-            // Quitar permanencia. Las reservas anteriores a la seleccionada se conservan, las futuras se eliminan.
+            // Quitar permanencia
             const clickedBookingDate = new Date(booking.date);
-            clickedBookingDate.setHours(0, 0, 0, 0); // Normalizar para comparar solo fechas
+            clickedBookingDate.setHours(0, 0, 0, 0);
 
-            // 1. Encontrar todas las reservas de la misma serie (incluida la actual)
             const allRelatedBookings = await Booking.find({
                 court: booking.court,
                 timeSlot: booking.timeSlot,
@@ -254,7 +265,6 @@ exports.makePermanentBooking = async (req, res) => {
             const bookingsToUpdateIds = [];
             const bookingsToDeleteIds = [];
 
-            // 2. Clasificar en pasadas/actual y futuras
             for (const b of allRelatedBookings) {
                 const aDate = new Date(b.date);
                 aDate.setHours(0, 0, 0, 0);
@@ -266,7 +276,6 @@ exports.makePermanentBooking = async (req, res) => {
                 }
             }
 
-            // 3. Actualizar pasadas/actual a no permanentes
             if (bookingsToUpdateIds.length > 0) {
                 await Booking.updateMany(
                     { _id: { $in: bookingsToUpdateIds } },
@@ -274,7 +283,6 @@ exports.makePermanentBooking = async (req, res) => {
                 );
             }
 
-            // 4. Eliminar futuras
             if (bookingsToDeleteIds.length > 0) {
                 if (booking.client) {
                     await Client.findByIdAndUpdate(booking.client, { 
@@ -283,14 +291,12 @@ exports.makePermanentBooking = async (req, res) => {
                 }
                 await Booking.deleteMany({ _id: { $in: bookingsToDeleteIds } });
             }
-
-            const updatedBooking = await Booking.findById(booking._id);
-            await createLog(req.user.name, `Removed permanent status from booking ${booking._id}`);
-            return res.json({ msg: 'Permanencia removida.', booking: updatedBooking });
+            
+            await createLog(req.user.name, `Quitó la permanencia de la reserva ${booking._id}`);
+            res.json({ msg: 'Permanencia quitada' });
         }
-        
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Error en el servidor');
+        console.error(err);
+        res.status(500).json({ msg: 'Error al gestionar la permanencia de la reserva', error: err.message });
     }
 };
