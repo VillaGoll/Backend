@@ -80,3 +80,14 @@ exports.getUsers = async (req, res) => {
         res.status(500).send('Server error');
     }
 };
+
+exports.getUserEmails = async (req, res) => {
+    try {
+        const users = await User.find().select('email');
+        const emails = users.map(user => user.email);
+        res.json(emails);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};

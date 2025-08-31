@@ -6,13 +6,6 @@ const ClientSchema = new mongoose.Schema({
         required: true,
         trim: true,
     },
-    email: {
-        type: String,
-        required: false,
-        unique: true,
-        sparse: true,
-        trim: true,
-    },
     phone: {
         type: String,
         required: false,
@@ -23,5 +16,4 @@ const ClientSchema = new mongoose.Schema({
         default: [],
     },
 });
-
 module.exports = mongoose.model('Client', ClientSchema);
