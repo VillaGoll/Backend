@@ -7,19 +7,13 @@ const { createLog } = require('./log.controller');
 // @access  Private/Admin
 exports.createClient = async (req, res) => {
     console.log("Request Body:", req.body);
-    const { name, email, phone } = req.body;
+    const { name, phone } = req.body;
 
     try {
         const clientData = {
             name,
             phone,
-        };
-
-        if (email) {
-            clientData.email = email;
-        } else {
-            clientData.email = null;
-        }
+        }; 
 
         const client = new Client(clientData);
 
@@ -28,9 +22,6 @@ exports.createClient = async (req, res) => {
         res.status(201).json(client);
     } catch (error) {
         console.error("Error creating client:", error);
-        if (error.code === 11000) {
-            return res.status(400).json({ message: "Email already exists" });
-        }
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -52,7 +43,7 @@ exports.getClients = async (req, res) => {
 // @route   PUT /api/clients/:id
 // @access  Private/Admin
 exports.updateClient = async (req, res) => {
-    const { name, email, phone } = req.body;
+    const { name, phone } = req.body;
 
     try {
         let client = await Client.findById(req.params.id);
@@ -62,7 +53,6 @@ exports.updateClient = async (req, res) => {
         }
 
         client.name = name;
-        client.email = email;
         client.phone = phone;
 
         await client.save();

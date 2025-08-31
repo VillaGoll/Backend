@@ -101,7 +101,7 @@ exports.login = async (req, res) => {
             process.env.JWT_SECRET,
 
             //Expira en 5 segundos para pruebas
-            { expiresIn: 360000 },
+            { expiresIn: 36000000 },
             (err, token) => {
                 if (err) throw err;
                 res.json({ token });
