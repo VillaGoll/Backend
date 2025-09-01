@@ -12,9 +12,28 @@ exports.createBooking = async (req, res) => {
         const bookingDateTime = new Date(`${date}T${timeSlot}:00-06:00`);
         const now = new Date();
         
-        if (bookingDateTime < now) {
-            return res.status(400).json({ msg: 'No se puede crear una reserva en una fecha y hora pasadas.' });
+        // Extraer solo la fecha (sin hora) para comparar días
+        const bookingDate = new Date(bookingDateTime);
+        bookingDate.setHours(0, 0, 0, 0);
+        
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+        
+        // Extraer la hora de la reserva y la hora actual
+        const bookingHour = bookingDateTime.getHours();
+        const currentHour = now.getHours();
+        
+        // Caso 1: Si la fecha de reserva es anterior a hoy, rechazar
+        if (bookingDate < today) {
+            return res.status(400).json({ msg: 'No se puede crear una reserva en una fecha pasada.' });
         }
+        
+        // Caso 2: Si es el mismo día pero la hora de reserva ya pasó completamente
+        if (bookingDate.getTime() === today.getTime() && bookingHour < currentHour) {
+            return res.status(400).json({ msg: 'No se puede crear una reserva en un horario que ya ha pasado.' });
+        }
+        
+        // En cualquier otro caso, permitir la reserva (incluyendo la hora actual)
 
         // Si viene un clientId, lo usamos, sino buscamos por nombre
         let clientId = client;
