@@ -23,22 +23,22 @@ exports.createBooking = async (req, res) => {
         const bookingHour = bookingDateTime.getHours();
         const currentHour = now.getHours();
         
-        // Caso 1: Si la fecha de reserva es anterior a hoy, rechazar (para todos los usuarios)
-        if (bookingDate < today) {
-            return res.status(400).json({ msg: 'No se puede crear una reserva en una fecha pasada.' });
-        }
-        
-        // Caso 2: Si es el mismo día pero la hora de reserva ya pasó completamente
-        if (bookingDate.getTime() === today.getTime() && bookingHour < currentHour) {
-            // Verificar si el usuario es administrador
-            if (req.user.role !== 'admin') {
+        // Verificar si el usuario es administrador
+        if (req.user.role !== 'admin') {
+            // Para usuarios regulares, aplicar todas las restricciones
+            
+            // Caso 1: Si la fecha de reserva es anterior a hoy, rechazar
+            if (bookingDate < today) {
+                return res.status(400).json({ msg: 'No se puede crear una reserva en una fecha pasada. Solo administradores pueden realizar esta acción.' });
+            }
+            
+            // Caso 2: Si es el mismo día pero la hora de reserva ya pasó completamente
+            if (bookingDate.getTime() === today.getTime() && bookingHour < currentHour) {
                 return res.status(400).json({ msg: 'No se puede crear una reserva en un horario que ya ha pasado. Solo administradores pueden realizar esta acción.' });
             }
-            // Si es administrador, permitir continuar con la creación de la reserva
         }
+        // Si es administrador, permitir continuar con la creación de la reserva sin importar la fecha/hora
         
-        // En cualquier otro caso, permitir la reserva (incluyendo la hora actual)
-
         // Si viene un clientId, lo usamos, sino buscamos por nombre
         let clientId = client;
         

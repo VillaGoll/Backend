@@ -29,6 +29,7 @@ app.use('/api/bookings', require('./routes/bookings.routes'));
 app.use('/api/users', require('./routes/users.routes'));
 app.use('/api/clients', require('./routes/clients.routes'));
 app.use('/api/logs', require('./routes/log.routes'));
+app.use('/api/stats', require('./routes/stats.routes'));
 
 // Ruta de prueba
 app.get('/', (req, res) => {
