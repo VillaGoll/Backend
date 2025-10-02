@@ -8,7 +8,7 @@ const ClientSchema = new mongoose.Schema({
     },
     phone: {
         type: String,
-        required: false,
+        required: true,
         trim: true,
     },
     bookings: {
@@ -16,4 +16,9 @@ const ClientSchema = new mongoose.Schema({
         default: [],
     },
 });
+
+// Create unique indexes for name and phone
+ClientSchema.index({ name: 1 }, { unique: true });
+ClientSchema.index({ phone: 1 }, { unique: true });
+
 module.exports = mongoose.model('Client', ClientSchema);
