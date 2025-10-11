@@ -9,6 +9,15 @@ exports.createClient = async (req, res) => {
     const { name, phone } = req.body;
 
     try {
+        //Si el telefono NO viene, o viene null, pasar verificaciones y crear cliente de una vez
+        if (!phone || phone.trim() === '') {
+            // Si no hay teléfono, crear el cliente sin verificar duplicados
+            const client = new Client({ name });
+            await client.save();
+            await createLog(req.user.name, `Creo al cliente sin teléfono: ${client.name}`);
+            return res.status(201).json(client);
+        }
+
         // Check for duplicates before attempting to create
         const existingClient = await Client.findOne({
             $or: [
