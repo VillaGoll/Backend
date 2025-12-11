@@ -5,7 +5,7 @@ const { createLog } = require('./log.controller');
 
 // Crear una nueva reserva
 exports.createBooking = async (req, res) => {
-    const { court, date, timeSlot, clientName, deposit, status, client } = req.body;
+    const { court, date, timeSlot, clientName, deposit, depositNote, status, client } = req.body;
 
     try {
         // Validar que la fecha y hora de la reserva no sean en el pasado
@@ -60,6 +60,7 @@ exports.createBooking = async (req, res) => {
             client: clientId,
             clientName,
             deposit,
+            depositNote,
             status,
         });
 
@@ -124,7 +125,7 @@ exports.getBookingsByDateRange = async (req, res) => {
 
 // Actualizar una reserva
 exports.updateBooking = async (req, res) => {
-    const { clientName, deposit, status, client } = req.body;
+    const { clientName, deposit, depositNote, status, client } = req.body;
 
     try {
         let booking = await Booking.findById(req.params.id);
@@ -144,6 +145,7 @@ exports.updateBooking = async (req, res) => {
 
         booking.clientName = clientName || booking.clientName;
         if (deposit !== undefined) booking.deposit = deposit;
+        if (depositNote !== undefined) booking.depositNote = depositNote;
         if (status) booking.status = status;
 
         // Establecer la nueva referencia (o quitarla si no hay cliente)
