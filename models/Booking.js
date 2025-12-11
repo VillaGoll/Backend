@@ -28,9 +28,10 @@ const BookingSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-    deposit: {
-        type: Number,
-        default: 0,
+    depositNote: {
+        type: String,
+        trim: true,
+        default: '',
     },
     status: {
         type: String,
