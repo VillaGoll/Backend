@@ -520,3 +520,65 @@ exports.exportFinancialToExcel = async (req, res) => {
         res.status(500).json({ message: 'Error del servidor' });
     }
 };
+
+// @desc    Obtener reporte anual de clientes (veces jugadas por mes)
+// @route   GET /api/stats/clients/annual-report
+// @access  Private/Admin
+exports.getClientAnnualReport = async (req, res) => {
+    try {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        
+        // Rango: 1 de enero al 31 de diciembre del año en curso
+        const startDate = new Date(currentYear, 0, 1);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(currentYear, 11, 31);
+        endDate.setHours(23, 59, 59, 999);
+        
+        // Obtener todos los clientes
+        const clients = await Client.find().sort({ name: 1 });
+        
+        // Obtener todas las reservas asistidas del año en curso de una sola vez
+        const bookings = await Booking.find({
+            date: { $gte: startDate, $lte: endDate },
+            status: 'Llegó'
+        });
+        
+        // Crear un mapa de clientName -> array de 12 meses
+        // También mapear por client ObjectId
+        const clientBookingMap = new Map();
+        
+        for (const booking of bookings) {
+            const bookingDate = new Date(booking.date);
+            const month = bookingDate.getMonth(); // 0-11
+            
+            // Buscar por clientName (más confiable ya que siempre existe)
+            const key = booking.clientName?.trim();
+            if (!key) continue;
+            
+            if (!clientBookingMap.has(key)) {
+                clientBookingMap.set(key, new Array(12).fill(0));
+            }
+            clientBookingMap.get(key)[month]++;
+        }
+        
+        // Construir el resultado
+        const result = clients.map(client => {
+            const months = clientBookingMap.get(client.name) || new Array(12).fill(0);
+            const total = months.reduce((sum, count) => sum + count, 0);
+            
+            return {
+                name: client.name,
+                phone: client.phone || '',
+                months,
+                total
+            };
+        });
+        
+        await createLog(req.user.name, `Consultó reporte anual de clientes ${currentYear}`);
+        res.json({ year: currentYear, clients: result });
+    } catch (error) {
+        console.error('Error al obtener reporte anual de clientes:', error);
+        res.status(500).json({ message: 'Error del servidor' });
+    }
+};

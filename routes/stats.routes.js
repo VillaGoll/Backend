@@ -14,6 +14,11 @@ router.get('/clients', [auth, isAdmin], statsController.getClientStats);
 // @access  Private (Admin)
 router.get('/financial', [auth, isAdmin], statsController.getFinancialStats);
 
+// @route   GET api/stats/clients/annual-report
+// @desc    Get annual client report (bookings per month for current year)
+// @access  Private (Admin)
+router.get('/clients/annual-report', [auth, isAdmin], statsController.getClientAnnualReport);
+
 // @route   GET api/stats/clients/export
 // @desc    Export client data to Excel
 // @access  Private (Admin)
