@@ -33,6 +33,11 @@ const BookingSchema = new mongoose.Schema({
         trim: true,
         default: '',
     },
+    depositNote: {
+        type: String,
+        trim: true,
+        default: '',
+    },
     status: {
         type: String,
         enum: ['Llegó', 'No llegó'],
