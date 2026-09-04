@@ -29,4 +29,14 @@ router.get('/clients/export', [auth, isAdmin], statsController.exportClientsToEx
 // @access  Private (Admin)
 router.get('/financial/export', [auth, isAdmin], statsController.exportFinancialToExcel);
 
+// @route   GET api/stats/no-shows
+// @desc    Get no-show statistics (clients who didn't arrive)
+// @access  Private (Admin)
+router.get('/no-shows', [auth, isAdmin], statsController.getNoShowStats);
+
+// @route   GET api/stats/no-shows/export
+// @desc    Export no-show data to Excel
+// @access  Private (Admin)
+router.get('/no-shows/export', [auth, isAdmin], statsController.exportNoShowsToExcel);
+
 module.exports = router;
