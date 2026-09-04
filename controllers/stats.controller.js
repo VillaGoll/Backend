@@ -3,6 +3,7 @@ const Client = require('../models/Client');
 const Court = require('../models/Court');
 const { createLog } = require('./log.controller');
 const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 
 // Función auxiliar para obtener fechas de inicio y fin según el tipo de período
 const getPeriodDates = (periodType) => {
@@ -244,12 +245,9 @@ exports.exportClientsToExcel = async (req, res) => {
         const { type = 'week' } = req.query;
         const { startDate, endDate } = getPeriodDates(type);
         
-        // Obtener todos los clientes
         const clients = await Client.find();
         
-        // Para cada cliente, calcular estadísticas
         const clientStats = await Promise.all(clients.map(async (client) => {
-            // Buscar reservas del cliente en el período
             const bookings = await Booking.find({
                 $or: [
                     { client: client._id },
@@ -262,14 +260,12 @@ exports.exportClientsToExcel = async (req, res) => {
             const attendanceCount = bookings.filter(b => b.status === 'Llegó').length;
             const attendanceRate = bookingsCount > 0 ? attendanceCount / bookingsCount : 0;
             
-            // Calcular ingresos basados en el precio real de la cancha para las reservas asistidas
             let totalCalculatedIncome = 0;
             for (const booking of bookings) {
                 if (booking.status === 'Llegó' && booking.court && booking.timeSlot) {
                     const bookingHour = parseInt(booking.timeSlot.split(':')[0]);
                     const courtPricing = booking.court.pricing;
                     
-                    // Determinar el precio según el rango horario
                     let price = 0;
                     if (bookingHour === 6) {
                         price = courtPricing.sixAM || 0;
@@ -288,28 +284,90 @@ exports.exportClientsToExcel = async (req, res) => {
             }
             
             return {
-                ID: client._id.toString(),
-                Nombre: client.name,
-                Email: client.email || '',
-                Teléfono: client.phone || '',
-                'Total Reservas': bookingsCount,
-                'Asistencias': attendanceCount,
-                'Tasa de Asistencia': `${(attendanceRate * 100).toFixed(1)}%`,
-                'Ingresos Calculados': totalCalculatedIncome
+                nombre: client.name,
+                email: client.email || '',
+                telefono: client.phone || '',
+                totalReservas: bookingsCount,
+                asistencias: attendanceCount,
+                tasaAsistencia: `${(attendanceRate * 100).toFixed(1)}%`,
+                ingresosCalculados: totalCalculatedIncome
             };
         }));
         
-        // Crear libro de Excel
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(clientStats);
+        const wb = new ExcelJS.Workbook();
+        wb.creator = 'VillaGol';
+        wb.created = new Date();
+
+        const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00695C' } };
+        const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+        const headerBorder = {
+            top: { style: 'thin', color: { argb: 'FF004D40' } },
+            bottom: { style: 'thin', color: { argb: 'FF004D40' } },
+            left: { style: 'thin', color: { argb: 'FF004D40' } },
+            right: { style: 'thin', color: { argb: 'FF004D40' } }
+        };
+        const cellBorder = {
+            top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+        };
+        const altRowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+        const titleFont = { bold: true, size: 14, name: 'Calibri', color: { argb: 'FF00695C' } };
+        const subtitleFont = { size: 10, name: 'Calibri', color: { argb: 'FF757575' } };
+
+        const ws = wb.addWorksheet('Estadísticas de Clientes', { properties: { tabColor: { argb: 'FF00695C' } } });
+
+        ws.getColumn(1).width = 6;
+        ws.getColumn(2).width = 28;
+        ws.getColumn(3).width = 28;
+        ws.getColumn(4).width = 16;
+        ws.getColumn(5).width = 16;
+        ws.getColumn(6).width = 14;
+        ws.getColumn(7).width = 18;
+        ws.getColumn(8).width = 20;
+
+        ws.mergeCells('A1:H1');
+        const titleCell = ws.getCell('A1');
+        titleCell.value = 'Estadísticas de Clientes - VillaGol';
+        titleCell.font = titleFont;
+        titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        ws.getRow(1).height = 30;
+
+        ws.mergeCells('A2:H2');
+        const subtitleCell = ws.getCell('A2');
+        const periodLabel = type === 'week' ? 'Esta semana' : type === 'month' ? 'Este mes' : 'Este año';
+        subtitleCell.value = `Periodo: ${periodLabel} | Generado: ${new Date().toLocaleDateString('es-GT')}`;
+        subtitleCell.font = subtitleFont;
+        subtitleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        ws.getRow(2).height = 22;
+
+        ws.getRow(3).height = 8;
+
+        const headerRow = ws.getRow(4);
+        headerRow.values = ['#', 'Nombre', 'Email', 'Telefono', 'Total Reservas', 'Asistencias', 'Tasa Asistencia', 'Ingresos Calculados'];
+        headerRow.eachCell((cell) => {
+            cell.fill = headerFill;
+            cell.font = headerFont;
+            cell.border = headerBorder;
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        });
+        headerRow.height = 26;
+
+        clientStats.forEach((row, idx) => {
+            const dataRow = ws.addRow([idx + 1, row.nombre, row.email, row.telefono, row.totalReservas, row.asistencias, row.tasaAsistencia, row.ingresosCalculados]);
+            dataRow.eachCell((cell, colNumber) => {
+                cell.border = cellBorder;
+                cell.alignment = { vertical: 'middle', horizontal: colNumber <= 4 ? 'left' : 'center' };
+                cell.font = { size: 10, name: 'Calibri' };
+                if (idx % 2 === 1) {
+                    cell.fill = altRowFill;
+                }
+            });
+        });
         
-        // Añadir hoja al libro
-        XLSX.utils.book_append_sheet(wb, ws, 'Estadísticas de Clientes');
+        const excelBuffer = await wb.xlsx.writeBuffer();
         
-        // Generar buffer
-        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
-        
-        // Configurar cabeceras para descarga
         res.setHeader('Content-Disposition', `attachment; filename=clientes_${type}_${new Date().toISOString().split('T')[0]}.xlsx`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         
@@ -738,31 +796,140 @@ exports.exportNoShowsToExcel = async (req, res) => {
             }
         }
 
-        const wb = XLSX.utils.book_new();
+        const wb = new ExcelJS.Workbook();
+        wb.creator = 'VillaGol';
+        wb.created = new Date();
 
-        const wsSummary = XLSX.utils.json_to_sheet(clientStatsData);
-        wsSummary['!cols'] = [
-            { wch: 5 },
-            { wch: 25 },
-            { wch: 15 },
-            { wch: 15 },
-            { wch: 12 },
-            { wch: 18 }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
+        const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A237E' } };
+        const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+        const headerBorder = {
+            top: { style: 'thin', color: { argb: 'FF0D47A1' } },
+            bottom: { style: 'thin', color: { argb: 'FF0D47A1' } },
+            left: { style: 'thin', color: { argb: 'FF0D47A1' } },
+            right: { style: 'thin', color: { argb: 'FF0D47A1' } }
+        };
+        const cellBorder = {
+            top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+        };
+        const altRowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+        const titleFont = { bold: true, size: 14, name: 'Calibri', color: { argb: 'FF1A237E' } };
+        const subtitleFont = { size: 10, name: 'Calibri', color: { argb: 'FF757575' } };
 
-        const wsDetail = XLSX.utils.json_to_sheet(detailData);
-        wsDetail['!cols'] = [
-            { wch: 5 },
-            { wch: 25 },
-            { wch: 15 },
-            { wch: 15 },
-            { wch: 20 },
-            { wch: 12 }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle');
+        // ===== HOJA RESUMEN =====
+        const wsResumen = wb.addWorksheet('Resumen', { properties: { tabColor: { argb: 'FF1A237E' } } });
 
-        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+        wsResumen.getColumn(1).width = 6;
+        wsResumen.getColumn(2).width = 28;
+        wsResumen.getColumn(3).width = 16;
+        wsResumen.getColumn(4).width = 16;
+        wsResumen.getColumn(5).width = 14;
+        wsResumen.getColumn(6).width = 20;
+
+        // Título
+        wsResumen.mergeCells('A1:F1');
+        const titleCell = wsResumen.getCell('A1');
+        titleCell.value = 'Reporte de Inasistencias - VillaGol';
+        titleCell.font = titleFont;
+        titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        wsResumen.getRow(1).height = 30;
+
+        // Subtítulo
+        wsResumen.mergeCells('A2:F2');
+        const subtitleCell = wsResumen.getCell('A2');
+        const periodText = customStart && customEnd
+            ? `Periodo: ${customStart} al ${customEnd}`
+            : `Periodo: ${type === 'week' ? 'Esta semana' : type === 'month' ? 'Este mes' : 'Este año'}`;
+        subtitleCell.value = `${periodText} | Generado: ${new Date().toLocaleDateString('es-GT')}`;
+        subtitleCell.font = subtitleFont;
+        subtitleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        wsResumen.getRow(2).height = 22;
+
+        // Espacio
+        wsResumen.getRow(3).height = 8;
+
+        // Headers manuales (fila 4)
+        const headerRow = wsResumen.getRow(4);
+        headerRow.values = ['#', 'Cliente', 'Telefono', 'Total Reservas', 'No Llego', 'Tasa Inasistencia'];
+        headerRow.eachCell((cell) => {
+            cell.fill = headerFill;
+            cell.font = headerFont;
+            cell.border = headerBorder;
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        });
+        headerRow.height = 26;
+
+        // Datos
+        clientStatsData.forEach((row, idx) => {
+            const dataRow = wsResumen.addRow([row['#'], row['Cliente'], row['Telefono'], row['Total Reservas'], row['No Llego'], row['Tasa Inasistencia']]);
+            dataRow.eachCell((cell, colNumber) => {
+                cell.border = cellBorder;
+                cell.alignment = { vertical: 'middle', horizontal: colNumber <= 3 ? 'left' : 'center' };
+                cell.font = { size: 10, name: 'Calibri' };
+                if (idx % 2 === 1) {
+                    cell.fill = altRowFill;
+                }
+            });
+        });
+
+        // ===== HOJA DETALLE =====
+        const wsDetalle = wb.addWorksheet('Detalle', { properties: { tabColor: { argb: 'FFFF6F00' } } });
+
+        wsDetalle.getColumn(1).width = 6;
+        wsDetalle.getColumn(2).width = 28;
+        wsDetalle.getColumn(3).width = 16;
+        wsDetalle.getColumn(4).width = 16;
+        wsDetalle.getColumn(5).width = 22;
+        wsDetalle.getColumn(6).width = 14;
+
+        // Título
+        wsDetalle.mergeCells('A1:F1');
+        const detTitle = wsDetalle.getCell('A1');
+        detTitle.value = 'Detalle de Inasistencias - VillaGol';
+        detTitle.font = titleFont;
+        detTitle.alignment = { vertical: 'middle', horizontal: 'center' };
+        wsDetalle.getRow(1).height = 30;
+
+        wsDetalle.mergeCells('A2:F2');
+        const detSub = wsDetalle.getCell('A2');
+        detSub.value = `${periodText} | Generado: ${new Date().toLocaleDateString('es-GT')}`;
+        detSub.font = subtitleFont;
+        detSub.alignment = { vertical: 'middle', horizontal: 'center' };
+        wsDetalle.getRow(2).height = 22;
+
+        wsDetalle.getRow(3).height = 8;
+
+        // Headers manuales (fila 4)
+        const detailHeaderRow = wsDetalle.getRow(4);
+        detailHeaderRow.values = ['#', 'Cliente', 'Fecha', 'Hora', 'Cancha', 'Anticipo'];
+        detailHeaderRow.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF6F00' } };
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFE65100' } },
+                bottom: { style: 'thin', color: { argb: 'FFE65100' } },
+                left: { style: 'thin', color: { argb: 'FFE65100' } },
+                right: { style: 'thin', color: { argb: 'FFE65100' } }
+            };
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        });
+        detailHeaderRow.height = 26;
+
+        detailData.forEach((row, idx) => {
+            const dataRow = wsDetalle.addRow([row['#'], row['Cliente'], row['Fecha'], row['Hora'], row['Cancha'], row['Anticipo']]);
+            dataRow.eachCell((cell, colNumber) => {
+                cell.border = cellBorder;
+                cell.alignment = { vertical: 'middle', horizontal: colNumber <= 3 ? 'left' : 'center' };
+                cell.font = { size: 10, name: 'Calibri' };
+                if (idx % 2 === 1) {
+                    cell.fill = altRowFill;
+                }
+            });
+        });
+
+        const excelBuffer = await wb.xlsx.writeBuffer();
 
         const periodLabel = customStart && customEnd
             ? `${customStart}_${customEnd}`
