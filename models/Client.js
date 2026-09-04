@@ -11,6 +11,11 @@ const ClientSchema = new mongoose.Schema({
         required: false,
         trim: true,
     },
+    clientType: {
+        type: String,
+        enum: ['anticipo', 'pide_anticipo', 'no_cancha'],
+        default: null,
+    },
     bookings: {
         type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Booking' }],
         default: [],

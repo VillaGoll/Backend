@@ -6,13 +6,13 @@ const { createLog } = require('./log.controller');
 // @route   POST /api/clients
 // @access  Private/Admin
 exports.createClient = async (req, res) => {
-    const { name, phone } = req.body;
+    const { name, phone, clientType } = req.body;
 
     try {
         //Si el telefono NO viene, o viene null, pasar verificaciones y crear cliente de una vez
         if (!phone || phone.trim() === '') {
             // Si no hay teléfono, crear el cliente sin verificar duplicados
-            const client = new Client({ name });
+            const client = new Client({ name, clientType: clientType || null });
             await client.save();
             await createLog(req.user.name, `Creo al cliente sin teléfono: ${client.name}`);
             return res.status(201).json(client);
@@ -40,7 +40,7 @@ exports.createClient = async (req, res) => {
             return res.status(409).json({ message });
         }
 
-        const client = new Client({ name, phone });
+        const client = new Client({ name, phone, clientType: clientType || null });
         await client.save();
         await createLog(req.user.name, `Creo al cliente: ${client.name}`);
         res.status(201).json(client);
@@ -77,7 +77,7 @@ exports.getClients = async (req, res) => {
 // @route   PUT /api/clients/:id
 // @access  Private/Admin
 exports.updateClient = async (req, res) => {
-    const { name, phone } = req.body;
+    const { name, phone, clientType } = req.body;
     const clientId = req.params.id;
 
     try {
@@ -112,6 +112,7 @@ exports.updateClient = async (req, res) => {
 
         client.name = name;
         client.phone = phone;
+        client.clientType = clientType !== undefined ? clientType : client.clientType;
 
         await client.save();
         await createLog(req.user.name, `Actualizo al cliente: ${client.name}`);

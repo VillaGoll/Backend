@@ -582,3 +582,198 @@ exports.getClientAnnualReport = async (req, res) => {
         res.status(500).json({ message: 'Error del servidor' });
     }
 };
+
+// @desc    Obtener estadísticas de no-shows (clientes que no llegaron)
+// @route   GET /api/stats/no-shows
+// @access  Private/Admin
+exports.getNoShowStats = async (req, res) => {
+    try {
+        const { type = 'month', startDate: customStart, endDate: customEnd, courtId } = req.query;
+
+        let startDate, endDate;
+
+        if (customStart && customEnd) {
+            startDate = new Date(customStart);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(customEnd);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            const dates = getPeriodDates(type);
+            startDate = dates.startDate;
+            endDate = dates.endDate;
+        }
+
+        const bookingFilter = {
+            date: { $gte: startDate, $lte: endDate },
+            status: 'No llegó'
+        };
+
+        if (courtId) {
+            bookingFilter.court = courtId;
+        }
+
+        const clients = await Client.find();
+
+        const noShowStats = await Promise.all(clients.map(async (client) => {
+            const clientBookingFilter = {
+                $or: [
+                    { client: client._id },
+                    { clientName: client.name }
+                ],
+                date: { $gte: startDate, $lte: endDate }
+            };
+
+            if (courtId) {
+                clientBookingFilter.court = courtId;
+            }
+
+            const clientBookings = await Booking.find(clientBookingFilter)
+                .populate('court');
+
+            const totalBookings = clientBookings.length;
+            const noShowBookings = clientBookings.filter(b => b.status === 'No llegó');
+            const noShowCount = noShowBookings.length;
+            const noShowRate = totalBookings > 0 ? noShowCount / totalBookings : 0;
+
+            const noShowDetails = noShowBookings.map(b => ({
+                date: b.date,
+                timeSlot: b.timeSlot,
+                courtName: b.court ? b.court.name : 'Cancha eliminada',
+                deposit: b.deposit || 0
+            })).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            return {
+                _id: client._id,
+                name: client.name,
+                phone: client.phone || '',
+                totalBookings,
+                noShowCount,
+                noShowRate,
+                noShowDetails
+            };
+        }));
+
+        const filteredStats = noShowStats
+            .filter(s => s.noShowCount > 0)
+            .sort((a, b) => b.noShowCount - a.noShowCount);
+
+        await createLog(req.user.name, `Consultó reporte de inasistencias`);
+        res.json(filteredStats);
+    } catch (error) {
+        console.error('Error al obtener estadísticas de no-shows:', error);
+        res.status(500).json({ message: 'Error del servidor' });
+    }
+};
+
+// @desc    Exportar datos de no-shows a Excel
+// @route   GET /api/stats/no-shows/export
+// @access  Private/Admin
+exports.exportNoShowsToExcel = async (req, res) => {
+    try {
+        const { type = 'month', startDate: customStart, endDate: customEnd, courtId } = req.query;
+
+        let startDate, endDate;
+
+        if (customStart && customEnd) {
+            startDate = new Date(customStart);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(customEnd);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            const dates = getPeriodDates(type);
+            startDate = dates.startDate;
+            endDate = dates.endDate;
+        }
+
+        const clients = await Client.find();
+
+        const clientStatsData = [];
+        const detailData = [];
+        let rowNum = 0;
+        let detailRowNum = 0;
+
+        for (const client of clients) {
+            const clientBookingFilter = {
+                $or: [
+                    { client: client._id },
+                    { clientName: client.name }
+                ],
+                date: { $gte: startDate, $lte: endDate }
+            };
+
+            if (courtId) {
+                clientBookingFilter.court = courtId;
+            }
+
+            const clientBookings = await Booking.find(clientBookingFilter)
+                .populate('court');
+
+            const totalBookings = clientBookings.length;
+            const noShowBookings = clientBookings.filter(b => b.status === 'No llegó');
+            const noShowCount = noShowBookings.length;
+            const noShowRate = totalBookings > 0 ? (noShowCount / totalBookings * 100).toFixed(1) + '%' : '0.0%';
+
+            if (noShowCount > 0) {
+                rowNum++;
+                clientStatsData.push({
+                    '#': rowNum,
+                    'Cliente': client.name,
+                    'Telefono': client.phone || '',
+                    'Total Reservas': totalBookings,
+                    'No Llego': noShowCount,
+                    'Tasa Inasistencia': noShowRate
+                });
+
+                for (const booking of noShowBookings) {
+                    detailRowNum++;
+                    detailData.push({
+                        '#': detailRowNum,
+                        'Cliente': client.name,
+                        'Fecha': new Date(booking.date).toLocaleDateString('es-GT'),
+                        'Hora': booking.timeSlot,
+                        'Cancha': booking.court ? booking.court.name : 'Cancha eliminada',
+                        'Anticipo': booking.deposit || 0
+                    });
+                }
+            }
+        }
+
+        const wb = XLSX.utils.book_new();
+
+        const wsSummary = XLSX.utils.json_to_sheet(clientStatsData);
+        wsSummary['!cols'] = [
+            { wch: 5 },
+            { wch: 25 },
+            { wch: 15 },
+            { wch: 15 },
+            { wch: 12 },
+            { wch: 18 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
+
+        const wsDetail = XLSX.utils.json_to_sheet(detailData);
+        wsDetail['!cols'] = [
+            { wch: 5 },
+            { wch: 25 },
+            { wch: 15 },
+            { wch: 15 },
+            { wch: 20 },
+            { wch: 12 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle');
+
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+        const periodLabel = customStart && customEnd
+            ? `${customStart}_${customEnd}`
+            : type;
+        res.setHeader('Content-Disposition', `attachment; filename=no_shows_${periodLabel}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        await createLog(req.user.name, `Exportó reporte de inasistencias a Excel`);
+        res.send(excelBuffer);
+    } catch (error) {
+        console.error('Error al exportar datos de no-shows:', error);
+        res.status(500).json({ message: 'Error del servidor' });
+    }
+};
